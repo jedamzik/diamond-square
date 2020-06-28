@@ -2,6 +2,10 @@ import argparse
 from enum import IntEnum
 import random
 from typing import Callable, Dict, Tuple
+from blessed import Terminal
+import numpy as np
+import math
+import signal
 
 
 class SquareNodeGraph:
@@ -60,7 +64,7 @@ class SquareNodeGraph:
         for x in range(self.size):
             for y in range(self.size):
                 value = self.get_node(x, y)
-                arr[y, x] = int(255 * value)
+                arr[y, x] = math.floor(value * 10)/10.0
         return arr
 
 
@@ -334,8 +338,100 @@ def run():
     # ... do some plotting
 
     if args.print:
-        print(graph)
+        # print(graph.as_nparray())
+        term = Terminal()
+        data = graph.as_nparray()
 
+        with term.fullscreen(), term.cbreak():
+            x = 0
+            y = 0
+            grid = Grid(x, y, data, term)
+
+            grid.draw()
+
+            signal.signal(signal.SIGWINCH, grid.on_resize)
+
+            keypress = None
+    
+            while keypress != 'q':
+                keypress = term.inkey()
+
+                # print(keypress.code)
+
+                if keypress.code == 258:
+                    y -= 1
+                    grid.set_pos(x, y)
+                    grid.draw()
+                if keypress.code == 259:
+                    y += 1
+                    grid.set_pos(x, y)
+                    grid.draw()
+
+                if keypress.code == 260:
+                    x -= 1
+                    grid.set_pos(x, y)
+                    grid.draw()
+                if keypress.code == 261:
+                    x += 1
+                    grid.set_pos(x, y)
+                    grid.draw()
+
+class Grid:
+    def __init__(self, x_pos: int, y_pos: int, data, term: Terminal):
+        self.x = term.width
+        self.x_offset = 3
+        self.y = term.height
+        self.y_offset = 1
+        self.x_pos = x_pos
+        self.y_pos = y_pos
+        self.data = data
+        self.term = term
+        self.color_treshholds = {
+            0: term.on_black,
+            0.1: term.on_gray10,
+            0.2: term.on_gray20,
+            0.3: term.on_gray30,
+            0.4: term.on_gray40,
+            0.5: term.on_gray50,
+            0.6: term.on_gray60,
+            0.7: term.on_gray70,
+            0.8: term.on_gray80,
+            0.9: term.on_gray90,
+            1: term.on_white
+        }
+
+    def on_resize(self, sig, action):
+        self.draw()
+
+    def set_pos(self, x_pos: int, y_pos: int) -> None:
+        self.x_pos = x_pos
+        self.y_pos = y_pos
+
+    def draw_cell(self, start_x: int, start_y: int, value: float) -> None:
+        color = self.color_treshholds[value]
+        for y in range(start_y, end_y := start_y + self.y_offset + 1):
+            for x in range(start_x, end_x := start_x + self.x_offset + 1):
+                print(self.term.move(y, x) + color(' '))
+
+    def draw(self) -> None:
+        for y, row in enumerate(self.data):
+            for x, value in enumerate(row):
+                if x == 0:
+                    start_x = x
+                else:
+                    start_x = x + x * self.x_offset
+
+                if y == 0:
+                    start_y = y
+                else:
+                    start_y = y + y * self.y_offset
+
+                end_x = start_x + self.x_offset + 1
+                end_y = start_y + self.y_offset + 1
+
+                if (not end_x >= self.term.width) and (not end_y >=
+                self.term.height):
+                    self.draw_cell(start_x, start_y, value)
 
 if __name__ == '__main__':
 
